@@ -337,9 +337,25 @@ with col2:
 
 st.divider()
 
+# Gemini stays disabled until final testing
+try:
+    gemini_enabled = st.secrets.get(
+        "GEMINI_ENABLED",
+        False,
+    )
+except FileNotFoundError:
+    gemini_enabled = False
+
+if not gemini_enabled:
+    st.info(
+        "Demo Mode: AI product analysis will "
+        "be enabled during final testing."
+    )
+
 if st.button(
     "🔍 Analyse and Compare Products",
     type="primary",
+    disabled=not gemini_enabled,
 ):
 
     if not priority.strip():
