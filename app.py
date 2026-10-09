@@ -1,4 +1,5 @@
-
+import threading
+import time
 import logging
 import re
 from io import BytesIO
@@ -1050,11 +1051,24 @@ else:
 
 
 # ==========================================
-# 18. OPTIONAL EMAIL REPORT
+# 18. EMAIL REPORT
 # ==========================================
+
+@st.cache_resource
+def get_email_rate_state():
+    """Basic shared limits for this running app instance."""
+    return {
+        "lock": threading.Lock(),
+        "send_times": [],
+        "recipient_last_sent": {},
+    }
+
 
 st.divider()
 st.subheader("📧 Email Your Comparison Report")
+
+if "email_sent" not in st.session_state:
+    st.session_state.email_sent = False
 
 if not st.session_state.analysis_result:
 
@@ -1067,108 +1081,165 @@ elif not EMAIL_ENABLED:
 
     st.info(
         "Email delivery is currently disabled. "
-        "You can download the Markdown or PDF "
-        "report above."
+        "You can download the report above."
     )
 
 else:
 
-    recipient_email = (
-        st.session_state.user_email.strip()
+    recipient_email = st.session_state.user_email.strip()
+
+    st.write(f"Report recipient: {recipient_email}")
+
+    st.caption(
+        "The report will be sent to the email address "
+        "you entered during onboarding."
     )
 
-    st.write(
-        f"Report recipient: {recipient_email}"
-    )
+    if st.session_state.email_sent:
 
-    with st.form("email_report_form"):
-
-        consent = st.checkbox(
-            "I agree to receive my comparison "
-            "report by email."
+        st.success(
+            "Your report has already been sent "
+            "during this session."
         )
 
-        send_clicked = st.form_submit_button(
-            "📤 Send Report by Email"
-        )
+    else:
 
-    if send_clicked:
+        with st.form("email_report_form"):
 
-        sender_email = get_secret(
-            "EMAIL_SENDER", ""
-        ).strip()
-
-        app_password = get_secret(
-            "EMAIL_APP_PASSWORD", ""
-        ).replace(" ", "")
-
-        allowed_recipient = get_secret(
-            "EMAIL_ALLOWED_RECIPIENT", ""
-        ).strip()
-
-        if not consent:
-            st.warning(
-                "Please confirm your consent."
+            consent = st.checkbox(
+                "I confirm this is my email address "
+                "and I agree to receive the report."
             )
 
-        elif (
-            not allowed_recipient
-            or recipient_email.casefold()
-            != allowed_recipient.casefold()
-        ):
-            st.error(
-                "Email is restricted to the "
-                "approved test recipient."
+            send_clicked = st.form_submit_button(
+                "📤 Send Report by Email"
             )
 
-        elif (
-            not sender_email
-            or not app_password
-            or app_password == "ADD_LATER"
-        ):
-            st.error(
-                "Email credentials are not configured."
-            )
+        if send_clicked:
 
-        else:
+            sender_email = get_secret(
+                "EMAIL_SENDER", ""
+            ).strip()
 
-            try:
+            app_password = get_secret(
+                "EMAIL_APP_PASSWORD", ""
+            ).replace(" ", "")
 
-                with st.spinner(
-                    "Sending your report..."
-                ):
+            if not consent:
 
-                    send_report_email(
-                        sender_email=sender_email,
-                        app_password=app_password,
-                        recipient_email=recipient_email,
-                        customer_name=(
-                            st.session_state.user_name
-                        ),
-                        report_text=report_text,
-                    )
-
-            except Exception as error:
-
-                logging.exception(
-                    "Email report sending failed"
+                st.warning(
+                    "Please confirm your email address "
+                    "and consent."
                 )
+
+            elif (
+                not sender_email
+                or not app_password
+                or app_password == "ADD_LATER"
+            ):
 
                 st.error(
-                    "Email sending failed. "
-                    "Check the configuration."
-                )
-
-                st.caption(
-                    f"Error type: "
-                    f"{type(error).__name__}"
+                    "Email credentials are not configured."
                 )
 
             else:
 
-                st.success(
-                    "Report sent successfully!"
-                )
+                rate_state = get_email_rate_state()
+                now = time.time()
+                recipient_key = recipient_email.casefold()
+
+                permitted = False
+                limit_message = ""
+
+                with rate_state["lock"]:
+
+                    # Maximum 10 emails per 24 hours
+                    # for this running app instance.
+                    rate_state["send_times"] = [
+                        sent_at
+                        for sent_at in rate_state["send_times"]
+                        if now - sent_at < 86400
+                    ]
+
+                    last_sent = rate_state[
+                        "recipient_last_sent"
+                    ].get(recipient_key, 0)
+
+                    if len(rate_state["send_times"]) >= 10:
+
+                        limit_message = (
+                            "The demo email limit has been "
+                            "reached. Please download "
+                            "your report instead."
+                        )
+
+                    elif now - last_sent < 3600:
+
+                        limit_message = (
+                            "A report was recently sent "
+                            "to this address. Please try "
+                            "again later."
+                        )
+
+                    else:
+
+                        # Reserve a slot before sending.
+                        rate_state["send_times"].append(now)
+
+                        rate_state[
+                            "recipient_last_sent"
+                        ][recipient_key] = now
+
+                        permitted = True
+
+                if not permitted:
+
+                    st.warning(limit_message)
+
+                else:
+
+                    try:
+
+                        with st.spinner(
+                            "Sending your report..."
+                        ):
+
+                            send_report_email(
+                                sender_email=sender_email,
+                                app_password=app_password,
+                                recipient_email=recipient_email,
+                                customer_name=(
+                                    st.session_state.user_name
+                                ),
+                                report_text=report_text,
+                            )
+
+                    except Exception as error:
+
+                        logging.exception(
+                            "Email report sending failed"
+                        )
+
+                        st.error(
+                            "Email sending failed. "
+                            "Please try downloading "
+                            "the report instead."
+                        )
+
+                        st.caption(
+                            f"Error type: "
+                            f"{type(error).__name__}"
+                        )
+
+                    else:
+
+                        st.session_state.email_sent = True
+
+                        st.success(
+                            "Report sent successfully! "
+                            "Please check your inbox "
+                            "and Spam folder."
+                        )
 
 
 # ==========================================
