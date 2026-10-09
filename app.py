@@ -29,7 +29,7 @@ from email_utils import send_report_email
 
 APP_NAME = "CompareWise AI"
 MODEL_NAME = "gemini-3.8-flash"
-CHAT_MODEL_NAME = "gemini-2.5-flash"
+CHAT_MODEL_NAME = MODEL_NAME
 
 MAX_IMAGE_SIZE = 10 * 1024 * 1024
 MAX_REPORT_SIZE = 1 * 1024 * 1024
