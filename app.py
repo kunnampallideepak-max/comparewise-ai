@@ -7,6 +7,7 @@ from google.genai import types
 
 from prompts import SYSTEM_PROMPT
 from email_utils import send_report_email
+import logging
 
 
 # ---------------------------------------
@@ -415,6 +416,8 @@ if st.button(
                     )
 
             except Exception as error:
+                print(f"Gemini API error details: {error}")
+                
                 st.error(
                     "Gemini analysis failed. "
                     "Check your API key, model access, "
@@ -516,6 +519,7 @@ else:
                 )
 
         except Exception as error:
+            logging.exception("Gemini follow-up request failed")
 
             st.error(
                 "Could not answer the question. "
