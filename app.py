@@ -693,7 +693,7 @@ category = st.selectbox(
     "Product Category",
     CATEGORIES,
     key="category",
-    on_change=clear_analysis,
+    
 )
 
 priority = st.text_input(
@@ -703,7 +703,7 @@ priority = st.text_input(
         "fewer fragrance ingredients"
     ),
     key="priority",
-    on_change=clear_analysis,
+    
 )
 
 
@@ -723,7 +723,7 @@ with col1:
         "Upload Product A label",
         type=["jpg", "jpeg", "png", "webp"],
         key="product_a",
-        on_change=clear_analysis,
+        
     )
 
     if image_a is not None:
@@ -741,7 +741,7 @@ with col2:
         "Upload Product B label",
         type=["jpg", "jpeg", "png", "webp"],
         key="product_b",
-        on_change=clear_analysis,
+        
     )
 
     if image_b is not None:
